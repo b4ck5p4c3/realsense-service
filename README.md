@@ -1,3 +1,3 @@
 # realsense-service
 
-Simple service to use with Intel RealSense F450
+Simple auth service to use with Intel RealSense F450

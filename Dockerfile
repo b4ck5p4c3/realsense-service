@@ -1,6 +1,7 @@
 FROM ghcr.io/astral-sh/uv:trixie
 WORKDIR /app
 RUN uv venv /app/venv
+RUN uv python pin 3.12
 ENV VIRTUAL_ENV=/app/venv
 ENV PATH="/app/venv/bin:$PATH"
 COPY requirements.txt requirements.txt
