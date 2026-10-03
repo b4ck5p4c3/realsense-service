@@ -1,0 +1,5 @@
+.env
+host-private.pem
+device-public.pem
+.venv
+__pycache__
