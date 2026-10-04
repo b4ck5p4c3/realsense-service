@@ -99,6 +99,7 @@ class RealsenseWorker:
     def main_thread(self) -> None:
         while True:
             try:
+                self.is_busy = False
                 self.authenticator = rsid_py.FaceAuthenticator(
                     SignatureCallback(self.host_private_key, self.device_public_key),
                     rsid_py.DeviceType.F45x,
@@ -176,7 +177,7 @@ class RealsenseWorker:
         self.is_busy = True
 
         self.task_queue.put(RealsenseTask(RealsenseTaskType.ENROLL, user_id))
-        return self.task_result_queue.get()
+        return self.task_result_queue.get(timeout=20)
 
     def remove(self, user_id: str) -> bool:
         if self.is_busy:
@@ -184,7 +185,7 @@ class RealsenseWorker:
         self.is_busy = True
 
         self.task_queue.put(RealsenseTask(RealsenseTaskType.REMOVE, user_id))
-        return self.task_result_queue.get()[0]
+        return self.task_result_queue.get(timeout=20)[0]
 
     def get_users(self) -> set[str]:
         return self.users
