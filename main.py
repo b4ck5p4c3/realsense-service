@@ -8,6 +8,8 @@ from realsense_worker import RealsenseWorker, RealsenseBusyError
 from contextlib import asynccontextmanager
 import paho.mqtt.client as mqtt
 from urllib.parse import urlparse
+from uuid import UUID
+import base64
 
 logging.basicConfig(
     level=logging.INFO,
@@ -53,6 +55,11 @@ def mqtt_on_connect(client, userdata, flags, reason_code, properties):
 def mqtt_on_connect_fail(client, error):
     logger.error(f"Failed to connect to MQTT. Error: {error}")
 
+def convert_uuid_to_b64(uuid: UUID) -> str:
+    return base64.urlsafe_b64encode(uuid.bytes).decode('ascii')
+
+def convert_b64_to_uuid(data: str) -> UUID:
+    return UUID(bytes=base64.urlsafe_b64decode(data))
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -71,7 +78,7 @@ async def lifespan(app: FastAPI):
     mqttc.loop_start()
 
     def auth_handler(user_id: str) -> None:
-        mqttc.publish(MQTT_TOPIC, user_id)
+        mqttc.publish(MQTT_TOPIC, convert_b64_to_uuid(user_id))
         pass
 
     realsense = RealsenseWorker(
@@ -110,23 +117,23 @@ def get_realsense(request: Request) -> RealsenseWorker:
 
 
 @api_router.get("/users/{id}")
-def user_status(id: str, realsense: RealsenseWorker = Depends(get_realsense)):
-    return {"is_enrolled": realsense.is_enrolled(id)}
+def user_status(id: UUID, realsense: RealsenseWorker = Depends(get_realsense)):
+    return {"is_enrolled": realsense.is_enrolled(convert_uuid_to_b64(id))}
 
 
 @api_router.delete("/users/{id}")
-def user_remove(id: str, realsense: RealsenseWorker = Depends(get_realsense)):
+def user_remove(id: UUID, realsense: RealsenseWorker = Depends(get_realsense)):
     try:
-        realsense.remove(id)
+        realsense.remove(convert_uuid_to_b64(id))
     except RealsenseBusyError:
         raise HTTPException(400, detail="RealSense is busy")
     return {}
 
 
 @api_router.post("/users/{id}")
-def user_enroll(id: str, realsense: RealsenseWorker = Depends(get_realsense)):
+def user_enroll(id: UUID, realsense: RealsenseWorker = Depends(get_realsense)):
     try:
-        success, status = realsense.enroll(id)
+        success, status = realsense.enroll(convert_uuid_to_b64(id))
         return {"success": success, "status": status}
     except RealsenseBusyError:
         raise HTTPException(400, detail="RealSense is busy")
@@ -134,7 +141,7 @@ def user_enroll(id: str, realsense: RealsenseWorker = Depends(get_realsense)):
 
 @api_router.get("/users")
 def users_list(realsense: RealsenseWorker = Depends(get_realsense)):
-    return realsense.get_users()
+    return map(convert_b64_to_uuid, realsense.get_users())
 
 
 app.include_router(api_router)
