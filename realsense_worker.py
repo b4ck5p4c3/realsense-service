@@ -143,6 +143,7 @@ class RealsenseWorker:
                             user_id=task.user_id, on_result=on_result
                         )
                         if enroll_result == rsid_py.EnrollStatus.Success:
+                            self.users.add(task.user_id)
                             self.task_result_queue.put((True, str(enroll_result)))
                             self.logger.info(
                                 f"User {task.user_id} enrolled successfully"
