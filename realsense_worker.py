@@ -97,66 +97,71 @@ class RealsenseWorker:
         pass
 
     def main_thread(self) -> None:
-        self.authenticator = rsid_py.FaceAuthenticator(
-            SignatureCallback(self.host_private_key, self.device_public_key),
-            rsid_py.DeviceType.F45x,
-            self.port,
-        )
-        self.users = set(self.authenticator.query_user_ids())
-        self.logger.info(f"Started, loaded {len(self.users)} users")
         while True:
+            try:
+                self.authenticator = rsid_py.FaceAuthenticator(
+                    SignatureCallback(self.host_private_key, self.device_public_key),
+                    rsid_py.DeviceType.F45x,
+                    self.port,
+                )
+                self.users = set(self.authenticator.query_user_ids())
+                self.logger.info(f"Started, loaded {len(self.users)} users")
+                while True:
 
-            def auth_on_result(result: rsid_py.AuthenticateStatus, user_id: str | None):
-                if result == rsid_py.AuthenticateStatus.Success:
-                    self.on_auth_callback(user_id)
-                    self.logger.info(f"User {user_id} authenticated")
-                if self.task_queue.empty():
-                    return
-                self.authenticator.cancel()
+                    def auth_on_result(result: rsid_py.AuthenticateStatus, user_id: str | None):
+                        if result == rsid_py.AuthenticateStatus.Success:
+                            self.on_auth_callback(user_id)
+                            self.logger.info(f"User {user_id} authenticated")
+                        if self.task_queue.empty():
+                            return
+                        self.authenticator.cancel()
 
-            self.authenticator.authenticate_loop(on_result=auth_on_result)
-            task = self.task_queue.get()
-            if task is None:
-                break
-            match task.type:
-                case RealsenseTaskType.REMOVE:
-                    if task.user_id in self.users:
-                        self.users.remove(task.user_id)
-                        self.authenticator.remove_user(task.user_id)
-                        self.task_result_queue.put((True, None))
-                    else:
-                        self.task_result_queue.put((False, None))
-                    self.logger.info(f"User {task.user_id} removed")
-                    self.is_busy = False
-                case RealsenseTaskType.ENROLL:
-                    if task.user_id in self.users:
-                        self.task_result_queue.put((True, "AlreadyEnrolled"))
-                        self.logger.info(f"User {task.user_id} already enrolled")
-                    else:
-                        enroll_result = None
+                    self.authenticator.authenticate_loop(on_result=auth_on_result)
+                    task = self.task_queue.get()
+                    if task is None:
+                        break
+                    match task.type:
+                        case RealsenseTaskType.REMOVE:
+                            if task.user_id in self.users:
+                                self.users.remove(task.user_id)
+                                self.authenticator.remove_user(task.user_id)
+                                self.task_result_queue.put((True, None))
+                            else:
+                                self.task_result_queue.put((False, None))
+                            self.logger.info(f"User {task.user_id} removed")
+                            self.is_busy = False
+                        case RealsenseTaskType.ENROLL:
+                            if task.user_id in self.users:
+                                self.task_result_queue.put((True, "AlreadyEnrolled"))
+                                self.logger.info(f"User {task.user_id} already enrolled")
+                            else:
+                                enroll_result = None
 
-                        def on_result(result):
-                            nonlocal enroll_result
-                            enroll_result = result
+                                def on_result(result):
+                                    nonlocal enroll_result
+                                    enroll_result = result
 
-                        self.authenticator.enroll(
-                            user_id=task.user_id, on_result=on_result
-                        )
-                        if enroll_result == rsid_py.EnrollStatus.Success:
-                            self.users.add(task.user_id)
-                            self.task_result_queue.put((True, str(enroll_result)))
-                            self.logger.info(
-                                f"User {task.user_id} enrolled successfully"
-                            )
-                        else:
-                            self.task_result_queue.put((False, str(enroll_result)))
-                            self.logger.info(
-                                f"User {task.user_id} enroll failed: {enroll_result}"
-                            )
-                    self.is_busy = False
-                    pass
-        self.authenticator.disconnect()
-        self.logger.info("Stopped")
+                                self.authenticator.enroll(
+                                    user_id=task.user_id, on_result=on_result
+                                )
+                                if enroll_result == rsid_py.EnrollStatus.Success:
+                                    self.users.add(task.user_id)
+                                    self.task_result_queue.put((True, str(enroll_result)))
+                                    self.logger.info(
+                                        f"User {task.user_id} enrolled successfully"
+                                    )
+                                else:
+                                    self.task_result_queue.put((False, str(enroll_result)))
+                                    self.logger.info(
+                                        f"User {task.user_id} enroll failed: {enroll_result}"
+                                    )
+                            self.is_busy = False
+                            pass
+                self.authenticator.disconnect()
+                self.logger.info("Stopped")
+            except Exception as e:
+                self.logger.fatal(e)
+                pass
 
     def start(self) -> None:
         self.thread.start()
