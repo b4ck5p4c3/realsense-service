@@ -78,8 +78,7 @@ async def lifespan(app: FastAPI):
     mqttc.loop_start()
 
     def auth_handler(user_id: str) -> None:
-        mqttc.publish(MQTT_TOPIC, convert_b64_to_uuid(user_id))
-        pass
+        mqttc.publish(MQTT_TOPIC, str(convert_b64_to_uuid(user_id)))
 
     realsense = RealsenseWorker(
         REALSENSE_PORT,
