@@ -140,7 +140,7 @@ def user_enroll(id: UUID, realsense: RealsenseWorker = Depends(get_realsense)):
 
 @api_router.get("/users")
 def users_list(realsense: RealsenseWorker = Depends(get_realsense)):
-    return map(convert_b64_to_uuid, realsense.get_users())
+    return list(map(str, map(convert_b64_to_uuid, list(realsense.get_users()))))
 
 
 app.include_router(api_router)
